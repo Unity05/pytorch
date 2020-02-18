@@ -1143,7 +1143,6 @@ graph(%x : Tensor,
         assert len(attrs_with_prefix(m.relu, '_observer_')) == 1, \
             'Expected to have 0 observer submodule'
 
-
     @_tmp_donotuse_dont_inline_everything
     def test_insert_observers_weight_dtype(self):
         class M(torch.nn.Module):
