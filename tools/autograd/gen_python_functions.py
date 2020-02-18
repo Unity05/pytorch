@@ -73,15 +73,6 @@ SKIP_PYTHON_BINDINGS = [
     'data', 'is_leaf', 'output_nr', '_version', 'requires_grad_', 'retain_grad'
 ]
 
-# These function signatures are not exposed to Python. Note that this signature
-# list does not support regex.
-SKIP_PYTHON_BINDINGS_SIGNATURES = [
-    'add(Tensor, Scalar, Scalar)', 'add_(Tensor, Scalar, Scalar)',
-    'sub(Tensor, Scalar, Scalar)', 'sub_(Tensor, Scalar, Scalar)',
-    'mul(Tensor, Scalar)', 'mul_(Tensor, Scalar)',
-    'div(Tensor, Scalar)', 'div_(Tensor, Scalar)',
-]
-
 def should_generate_python_binding(declaration):
     name = declaration['name']
     for pattern in SKIP_PYTHON_BINDINGS:
@@ -90,10 +81,6 @@ def should_generate_python_binding(declaration):
 
     simple_types = [arg['simple_type'] for arg in declaration['arguments']]
     signature = '{}({})'.format(name, ', '.join(simple_types))
-    for pattern in SKIP_PYTHON_BINDINGS_SIGNATURES:
-        if pattern == signature:
-            return False
-
     return True
 
 #
