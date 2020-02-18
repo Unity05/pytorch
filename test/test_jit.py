@@ -1118,6 +1118,16 @@ graph(%x : Tensor,
             def forward(self, x):
                 return self.relu(self.conv(x))
 
+        class FM(torch.nn.Module):
+            def __init__(self):
+                super(FM, self).__init__()
+                self.relu = torch.nn.ReLU()
+
+            def forward(self, x):
+                out = x
+                out += x
+                return self.relu(out)
+
         def attrs_with_prefix(module, prefix):
             return [x for x, _ in module._modules._c.items()
                     if x.startswith(prefix)]
@@ -1142,6 +1152,18 @@ graph(%x : Tensor,
         # observer for output of relu
         assert len(attrs_with_prefix(m.relu, '_observer_')) == 1, \
             'Expected to have 0 observer submodule'
+
+        m = torch.jit.script(FM())
+        qconfig_dict = {'': script_qconfig(default_qconfig)}
+        m = wrap_cpp_module(torch._C._jit_pass_insert_observers(m._c, "forward", qconfig_dict, False))
+        assert len(attrs_with_prefix(m, '_observer')) == 1, \
+            'Expected to have 1 observer'
+        assert len(attrs_with_prefix(m.relu, '_observer')) == 1, \
+            'Expected to have 1 observer'
+        FileCheck().check('aten::add_') \
+                   .check_not('Observer = prim::GetAttr[name="_observer_') \
+                   .check('ReLU = prim::GetAttr') \
+                   .run(str(get_forward_graph(m._c)))
 
     @_tmp_donotuse_dont_inline_everything
     def test_insert_observers_weight_dtype(self):

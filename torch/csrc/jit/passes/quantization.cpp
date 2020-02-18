@@ -449,6 +449,13 @@ graph(%self, %input, %inplace):
     %first_output = prim::CallMethod[name="forward"](%first_module, %input)
     %second_output = prim::CallFunction(%relu, %first_output, %inplace)
     return (%second_output) )");
+  // 2. Function - Module
+  const PatternInfo fm_add_relu = PatternInfo::parse_from_str(R"(
+graph(%self, %a, %b, %ignore):
+     %first_output = aten::add_(%a, %b, %ignore)
+     %second_module = match::module[name="ReLU"](%self)
+     %second_output = prim::CallMethod[name="forward"](%second_module, %first_output)
+     return (%second_output) )");
   // 3. Module - Module
   const PatternInfo mm_conv_relu = PatternInfo::parse_from_str(R"(
 graph(%self, %input):
@@ -464,16 +471,26 @@ graph(%input, %weight, %bias, %4):
      %first_output = aten::matmul(%input, %weight_t)
      %second_output = aten::add_(%first_output, %bias, %4)
      return (%second_output) )");
+  const PatternInfo ff_add_relu = PatternInfo::parse_from_str(R"(
+graph(%self, %a, %b, %ignore, %inplace):
+      %relu = prim::Constant[name="relu"]()
+      %first_output = aten::add_(%a, %b, %ignore)
+      %second_output = prim::CallFunction(%relu, %first_output, %inplace)
+      return (%second_output) )");
+
 
   const std::vector<std::reference_wrapper<const PatternInfo>> module_function_patterns = {
     mf_conv_functional_relu
   };
-  const std::vector<std::reference_wrapper<const PatternInfo>> function_module_patterns = {};
+  const std::vector<std::reference_wrapper<const PatternInfo>> function_module_patterns = {
+    fm_add_relu
+  };
   const std::vector<std::reference_wrapper<const PatternInfo>> module_patterns = {
     mm_conv_relu
   };
   const std::vector<std::reference_wrapper<const PatternInfo>> function_patterns = {
-    ff_matmul_add
+    ff_matmul_add,
+    ff_add_relu
   };
 };
 
