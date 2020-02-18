@@ -184,7 +184,7 @@ static inline Variable applySlicing(
             recordSelectTrace(tensor);
           }
         }
-        return at::indexing::TensorIndex(THPVariable_Unpack(obj));
+        return at::indexing::TensorIndex(std::move(tensor));
       } else if (PySequence_Check(obj)) {
         // TODO: Naughty naughty get out of jail free
         // (Fixing this means I have to fix the call chain though :/)
