@@ -1098,7 +1098,6 @@ graph(%x : Tensor,
         # check forward of sub.linear is observed
         check_observed(get_forward(m._c.getattr('sub').getattr('linear')).graph)
 
-    @_tmp_donotuse_dont_inline_everything
     def test_insert_observers_skip_values(self):
         import torch.nn.functional as F
 
@@ -1119,35 +1118,31 @@ graph(%x : Tensor,
             def forward(self, x):
                 return self.relu(self.conv(x))
 
-        def test_module(module, relu_call, num_observers):
-            m = torch.jit.script(module())
-            # TODO: this is because right-now the InsertObservers is in-place.
-            # When we change the implementation to clone the module before
-            # inserting observers, we can remove this copy
-            m = m.copy()
-            observer = torch.jit.script(default_observer())
-            qconfig_dict = {
-                '':
-                QConfig(
-                    activation=observer._c,
-                    weight=observer._c)
-            }
-            torch._C._jit_pass_insert_observers(m._c, "forward", qconfig_dict, True)
-            assert len([x for x, _ in m._modules._c.items()
-                        if x.startswith('_observer_')]) == num_observers, \
-                'Expected to have ' + str(num_observers) + ' observer submodules'
-            c = FileCheck().check('Conv2d = prim::GetAttr[name="conv"]') \
-                           .check_next('prim::CallMethod[name="forward"]') \
-                           .check_not('Observer = prim::GetAttr[name="_observer_') \
-                           .check(relu_call)
-            if num_observers == 1:
-                c = c.check('Observer = prim::GetAttr[name="_observer_') \
-                     .check_next('prim::CallMethod[name="forward"](%_observer_')
-            c.run(str(get_forward_graph(m._c)))
-            # TODO: add checks for conv and relu later, graph looks correct but this pr
-            # has too many changes already
-        test_module(M, 'prim::CallFunction(', 1)
-        test_module(M2, 'prim::CallMethod[name="forward"]', 0)
+        def attrs_with_prefix(module, prefix):
+            return [x for x, _ in module._modules._c.items()
+                    if x.startswith(prefix)]
+
+        qconfig_dict = {
+            '': script_qconfig(default_qconfig)
+        }
+        m = torch.jit.script(M())
+        m = wrap_cpp_module(torch._C._jit_pass_insert_observers(m._c, "forward", qconfig_dict, False))
+        # observer for input of conv
+        assert len(attrs_with_prefix(m.conv, '_observer_')) == 1, \
+            'Expected to have 1 observer submodule'
+        # observer for output of relu
+        assert len(attrs_with_prefix(m, '_observer_')) == 1, \
+            'Expected to have 1 observer submodule'
+
+        m = torch.jit.script(M2())
+        m = wrap_cpp_module(torch._C._jit_pass_insert_observers(m._c, "forward", qconfig_dict, False))
+        # observer for input of conv
+        assert len(attrs_with_prefix(m.conv, '_observer_')) == 1, \
+            'Expected to have 1 observer submodule'
+        # observer for output of relu
+        assert len(attrs_with_prefix(m.relu, '_observer_')) == 1, \
+            'Expected to have 0 observer submodule'
+
 
     @_tmp_donotuse_dont_inline_everything
     def test_insert_observers_weight_dtype(self):
@@ -1515,7 +1510,7 @@ graph(%packed_params_module, %a, %a_scale, %a_zero_point, %a_dtype, %r_scale, %r
         class TestModule(torch.nn.Module):
             def __init__(self):
                 super(TestModule, self).__init__()
-                self.conv = torch.nn.Conv2d(1, 20, 5, 1, bias=False)
+            self.conv = torch.nn.Conv2d(1, 20, 5, 1, bias=False)
                 self.bn = torch.nn.BatchNorm2d(num_features=20)
                 # to make sure new bias is not zero
                 self.bn.eps = 0.0027
