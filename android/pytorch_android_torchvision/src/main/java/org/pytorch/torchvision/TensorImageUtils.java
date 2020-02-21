@@ -38,6 +38,15 @@ public final class TensorImageUtils {
   }
 
   /**
+   * Creates new {@link org.pytorch.Tensor} from full {@link android.graphics.Bitmap}
+   *
+   *     order
+   */
+  public static Tensor bitmapToFloat32Tensor(final Bitmap bitmap) {
+    return bitmapToFloat32Tensor(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight());
+  }
+
+  /**
    * Writes tensor content from specified {@link android.graphics.Bitmap}, normalized with specified
    * in parameters mean and std to specified {@link java.nio.FloatBuffer} with specified offset.
    *
@@ -84,6 +93,35 @@ public final class TensorImageUtils {
   }
 
   /**
+   * Writes tensor content from specified {@link android.graphics.Bitmap}
+   * to specified {@link java.nio.FloatBuffer} with specified offset.
+   *
+   * @param bitmap {@link android.graphics.Bitmap} as a source for Tensor data
+   * @param x - x coordinate of top left corner of bitmap's area
+   * @param y - y coordinate of top left corner of bitmap's area
+   * @param width - width of bitmap's area
+   * @param height - height of bitmap's area
+   *     order
+   */
+  public static void bitmapToFloatBuffer(final Bitmap bitmap,
+      final int x,
+      final int y,
+      final int width,
+      final int height,
+      final FloatBuffer outBuffer,
+      final int outBufferOffset) {
+    checkOutBufferCapacityNoRgb(outBuffer, outBufferOffset, width, height);
+
+    final int pixelsCount = height * width;
+    final int[] pixels = new int[pixelsCount];
+    bitmap.getPixels(pixels, 0, width, x, y, width, height);
+    for (int i = 0; i < pixelsCount; i++) {
+      final int c = pixels[i];
+      outBuffer.put(((c) & 0xff) / 255.0f);
+    }
+  }
+
+  /**
    * Creates new {@link org.pytorch.Tensor} from specified area of {@link android.graphics.Bitmap},
    * normalized with specified in parameters mean and std.
    *
@@ -110,6 +148,28 @@ public final class TensorImageUtils {
     final FloatBuffer floatBuffer = Tensor.allocateFloatBuffer(3 * width * height);
     bitmapToFloatBuffer(bitmap, x, y, width, height, normMeanRGB, normStdRGB, floatBuffer, 0);
     return Tensor.fromBlob(floatBuffer, new long[] {1, 3, height, width});
+  }
+
+  /**
+   * Creates new {@link org.pytorch.Tensor} from specified area of {@link android.graphics.Bitmap}
+   *
+   * @param bitmap {@link android.graphics.Bitmap} as a source for Tensor data
+   * @param x - x coordinate of top left corner of bitmap's area
+   * @param y - y coordinate of top left corner of bitmap's area
+   * @param width - width of bitmap's area
+   * @param height - height of bitmap's area
+   *     order
+   */
+  public static Tensor bitmapToFloat32Tensor(
+      final Bitmap bitmap,
+      int x,
+      int y,
+      int width,
+      int height) {
+
+    final FloatBuffer floatBuffer = Tensor.allocateFloatBuffer(width * height);
+    bitmapToFloatBuffer(bitmap, x, y, width, height, floatBuffer, 0);
+    return Tensor.fromBlob(floatBuffer, new long[] {1, 1, height, width});
   }
 
   /**
@@ -241,6 +301,13 @@ public final class TensorImageUtils {
   private static void checkOutBufferCapacity(
       FloatBuffer outBuffer, int outBufferOffset, int tensorWidth, int tensorHeight) {
     if (outBufferOffset + 3 * tensorWidth * tensorHeight > outBuffer.capacity()) {
+      throw new IllegalStateException("Buffer underflow");
+    }
+  }
+
+  private static void checkOutBufferCapacityNoRgb(
+      FloatBuffer outBuffer, int outBufferOffset, int tensorWidth, int tensorHeight) {
+    if (outBufferOffset + tensorWidth * tensorHeight > outBuffer.capacity()) {
       throw new IllegalStateException("Buffer underflow");
     }
   }
